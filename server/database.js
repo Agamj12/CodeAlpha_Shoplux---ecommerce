@@ -1,4 +1,15 @@
-const Database = require('better-sqlite3');
+let Database;
+try {
+  if (process.env.VERCEL) {
+    Database = require('./alasql-shim');
+  } else {
+    Database = require('better-sqlite3');
+  }
+} catch (e) {
+  console.log("⚠️ Could not load better-sqlite3, falling back to AlaSQL shim:", e.message);
+  Database = require('./alasql-shim');
+}
+
 const path = require('path');
 const fs = require('fs');
 
