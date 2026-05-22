@@ -132,10 +132,15 @@ async function seed() {
   console.log('✅ Database seeded successfully!');
   console.log('📧 Admin: admin@shop.com / admin123');
   console.log('📧 User:  john@example.com / user123');
-  process.exit(0);
 }
 
-seed().catch(err => {
-  console.error('❌ Seed error:', err);
-  process.exit(1);
-});
+if (require.main === module) {
+  seed()
+    .then(() => process.exit(0))
+    .catch(err => {
+      console.error('❌ Seed error:', err);
+      process.exit(1);
+    });
+}
+
+module.exports = { seed };
