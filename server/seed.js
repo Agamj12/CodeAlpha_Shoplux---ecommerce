@@ -1,11 +1,31 @@
+require('dotenv').config();
 const { initDB, getDB } = require('./database');
 const bcrypt = require('bcryptjs');
+const mongoose = require('mongoose');
 
 async function seed() {
-  initDB();
-  const db = getDB();
+  // Ensure DB is initialized and connected
+  if (mongoose.connection.readyState === 0) {
+    initDB();
+    await new Promise((resolve) => {
+      mongoose.connection.once('open', resolve);
+    });
+  }
+
+  const { Counter, User, Category, Product, CartItem, Order, OrderItem, Review } = getDB();
 
   console.log('🌱 Seeding database...');
+
+  // 1. Clear existing data
+  await Counter.deleteMany({});
+  await User.deleteMany({});
+  await Category.deleteMany({});
+  await Product.deleteMany({});
+  await CartItem.deleteMany({});
+  await Order.deleteMany({});
+  await OrderItem.deleteMany({});
+  await Review.deleteMany({});
+  console.log('🧹 Cleared existing collections');
 
   // Categories
   const categories = [
@@ -17,23 +37,33 @@ async function seed() {
     { name: 'Beauty', description: 'Beauty and personal care', icon: '💄' },
   ];
 
-  const insertCategory = db.prepare('INSERT OR IGNORE INTO categories (name, description, icon) VALUES (?, ?, ?)');
-  categories.forEach(c => insertCategory.run(c.name, c.description, c.icon));
-
+  const savedCats = await Category.insertMany(categories);
   const cats = {};
-  db.prepare('SELECT * FROM categories').all().forEach(c => { cats[c.name] = c.id; });
+  savedCats.forEach(c => {
+    cats[c.name] = c._id;
+  });
 
   // Admin user
   const adminPassword = await bcrypt.hash('admin123', 10);
-  db.prepare('INSERT OR IGNORE INTO users (name, email, password, role, avatar) VALUES (?, ?, ?, ?, ?)').run(
-    'Admin User', 'admin@shop.com', adminPassword, 'admin', '#6C63FF'
-  );
+  const admin = new User({
+    name: 'Admin User',
+    email: 'admin@shop.com',
+    password: adminPassword,
+    role: 'admin',
+    avatar: '#6C63FF'
+  });
+  await admin.save();
 
   // Sample user
   const userPassword = await bcrypt.hash('user123', 10);
-  db.prepare('INSERT OR IGNORE INTO users (name, email, password, role, avatar) VALUES (?, ?, ?, ?, ?)').run(
-    'John Doe', 'john@example.com', userPassword, 'customer', '#FF6584'
-  );
+  const user = new User({
+    name: 'John Doe',
+    email: 'john@example.com',
+    password: userPassword,
+    role: 'customer',
+    avatar: '#FF6584'
+  });
+  await user.save();
 
   // Products
   const products = [
@@ -103,30 +133,57 @@ async function seed() {
     },
   ];
 
-  const insertProduct = db.prepare(
-    'INSERT OR IGNORE INTO products (name, description, price, original_price, category_id, stock, image, featured, rating, reviews_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-  );
-
   const ratings = [4.5, 4.8, 4.7, 4.3, 4.6, 4.2, 4.4, 4.9, 4.1, 4.7, 4.5, 4.8, 4.6, 4.3, 4.7, 4.5];
   const reviewCounts = [128, 342, 512, 89, 234, 156, 98, 67, 145, 78, 43, 891, 234, 112, 445, 267];
 
-  products.forEach((p, i) => {
-    insertProduct.run(p.name, p.description, p.price, p.original_price || null, cats[p.category], p.stock, p.image, p.featured, ratings[i] || 4.5, reviewCounts[i] || 50);
-  });
+  for (let i = 0; i < products.length; i++) {
+    const p = products[i];
+    const newProduct = new Product({
+      name: p.name,
+      description: p.description,
+      price: p.price,
+      original_price: p.original_price,
+      category_id: cats[p.category],
+      stock: p.stock,
+      image: p.image,
+      featured: p.featured,
+      rating: ratings[i] || 4.5,
+      reviews_count: reviewCounts[i] || 50
+    });
+    await newProduct.save();
+  }
 
   // Sample orders
-  const productIds = db.prepare('SELECT id FROM products LIMIT 4').all().map(p => p.id);
-  const userId = db.prepare("SELECT id FROM users WHERE email = 'john@example.com'").get().id;
+  const sampleProducts = await Product.find({}).limit(4);
+  const productIds = sampleProducts.map(p => p._id);
+  const customer = await User.findOne({ email: 'john@example.com' });
+  const userId = customer._id;
 
   if (productIds.length >= 2) {
-    const orderResult = db.prepare(
-      "INSERT OR IGNORE INTO orders (user_id, total, status, shipping_address, payment_method) VALUES (?, ?, ?, ?, ?)"
-    ).run(userId, 349.98, 'delivered', JSON.stringify({ street: '123 Main St', city: 'New York', state: 'NY', zip: '10001', country: 'USA' }), 'card');
+    const order = new Order({
+      user_id: userId,
+      total: 349.98,
+      status: 'delivered',
+      shipping_address: JSON.stringify({ street: '123 Main St', city: 'New York', state: 'NY', zip: '10001', country: 'USA' }),
+      payment_method: 'card'
+    });
+    await order.save();
 
-    if (orderResult.lastInsertRowid) {
-      db.prepare('INSERT INTO order_items (order_id, product_id, quantity, price) VALUES (?, ?, ?, ?)').run(orderResult.lastInsertRowid, productIds[0], 1, 199.99);
-      db.prepare('INSERT INTO order_items (order_id, product_id, quantity, price) VALUES (?, ?, ?, ?)').run(orderResult.lastInsertRowid, productIds[1], 1, 149.99);
-    }
+    const orderItem1 = new OrderItem({
+      order_id: order._id,
+      product_id: productIds[0],
+      quantity: 1,
+      price: 199.99
+    });
+    await orderItem1.save();
+
+    const orderItem2 = new OrderItem({
+      order_id: order._id,
+      product_id: productIds[1],
+      quantity: 1,
+      price: 149.99
+    });
+    await orderItem2.save();
   }
 
   console.log('✅ Database seeded successfully!');
@@ -136,7 +193,10 @@ async function seed() {
 
 if (require.main === module) {
   seed()
-    .then(() => process.exit(0))
+    .then(() => {
+      console.log('👋 Seeding process complete. Exiting.');
+      process.exit(0);
+    })
     .catch(err => {
       console.error('❌ Seed error:', err);
       process.exit(1);

@@ -5,98 +5,138 @@ const { authenticateToken, requireAdmin } = require('../middleware/auth');
 const router = express.Router();
 
 // Get all products with filters
-router.get('/', (req, res) => {
-  const db = getDB();
+router.get('/', async (req, res) => {
+  const { Product, Category } = getDB();
   const { category, search, sort, featured, page = 1, limit = 12 } = req.query;
-  const offset = (page - 1) * limit;
+  const offset = (parseInt(page) - 1) * parseInt(limit);
 
-  let query = `
-    SELECT p.*, c.name as category_name, c.icon as category_icon
-    FROM products p
-    LEFT JOIN categories c ON p.category_id = c.id
-    WHERE 1=1
-  `;
-  const params = [];
+  const filter = {};
 
-  if (category) {
-    query += ' AND c.name = ?';
-    params.push(category);
+  try {
+    if (category) {
+      const catDoc = await Category.findOne({ name: category });
+      if (catDoc) {
+        filter.category_id = catDoc._id;
+      } else {
+        return res.json({ products: [], total: 0, page: parseInt(page), totalPages: 0 });
+      }
+    }
+
+    if (search) {
+      filter.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    if (featured === 'true') {
+      filter.featured = 1;
+    }
+
+    const sortMap = {
+      'price_asc': { price: 1 },
+      'price_desc': { price: -1 },
+      'rating': { rating: -1 },
+      'newest': { created_at: -1 },
+      'name': { name: 1 }
+    };
+    const sortOption = sortMap[sort] || { created_at: -1 };
+
+    const total = await Product.countDocuments(filter);
+    const products = await Product.find(filter)
+      .sort(sortOption)
+      .skip(offset)
+      .limit(parseInt(limit))
+      .populate('category_id');
+
+    const formattedProducts = products.map(p => {
+      const pJson = p.toJSON();
+      pJson.category_name = p.category_id ? p.category_id.name : null;
+      pJson.category_icon = p.category_id ? p.category_id.icon : null;
+      pJson.category_id = p.category_id ? p.category_id._id : null;
+      return pJson;
+    });
+
+    res.json({
+      products: formattedProducts,
+      total,
+      page: parseInt(page),
+      totalPages: Math.ceil(total / parseInt(limit))
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
-  if (search) {
-    query += ' AND (p.name LIKE ? OR p.description LIKE ?)';
-    params.push(`%${search}%`, `%${search}%`);
-  }
-  if (featured === 'true') {
-    query += ' AND p.featured = 1';
-  }
-
-  const sortMap = {
-    'price_asc': 'p.price ASC',
-    'price_desc': 'p.price DESC',
-    'rating': 'p.rating DESC',
-    'newest': 'p.created_at DESC',
-    'name': 'p.name ASC'
-  };
-  query += ` ORDER BY ${sortMap[sort] || 'p.created_at DESC'}`;
-
-  const totalQuery = query.replace('SELECT p.*, c.name as category_name, c.icon as category_icon', 'SELECT COUNT(*) as total');
-  const total = db.prepare(totalQuery).get(...params).total;
-
-  query += ' LIMIT ? OFFSET ?';
-  params.push(parseInt(limit), parseInt(offset));
-
-  const products = db.prepare(query).all(...params);
-  res.json({ products, total, page: parseInt(page), totalPages: Math.ceil(total / limit) });
 });
 
 // Get single product
-router.get('/:id', (req, res) => {
-  const db = getDB();
-  const product = db.prepare(`
-    SELECT p.*, c.name as category_name, c.icon as category_icon
-    FROM products p
-    LEFT JOIN categories c ON p.category_id = c.id
-    WHERE p.id = ?
-  `).get(req.params.id);
+router.get('/:id', async (req, res) => {
+  const { Product, Review } = getDB();
+  try {
+    const product = await Product.findById(req.params.id).populate('category_id');
+    if (!product) return res.status(404).json({ error: 'Product not found' });
 
-  if (!product) return res.status(404).json({ error: 'Product not found' });
+    const reviews = await Review.find({ product_id: req.params.id })
+      .sort({ created_at: -1 })
+      .populate('user_id');
 
-  const reviews = db.prepare(`
-    SELECT r.*, u.name as user_name, u.avatar as user_avatar
-    FROM reviews r
-    JOIN users u ON r.user_id = u.id
-    WHERE r.product_id = ?
-    ORDER BY r.created_at DESC
-  `).all(req.params.id);
+    const formattedReviews = reviews.map(r => {
+      const rJson = r.toJSON();
+      rJson.user_name = r.user_id ? r.user_id.name : 'Unknown';
+      rJson.user_avatar = r.user_id ? r.user_id.avatar : null;
+      rJson.user_id = r.user_id ? r.user_id._id : null;
+      return rJson;
+    });
 
-  res.json({ ...product, reviews });
+    const productJson = product.toJSON();
+    productJson.category_name = product.category_id ? product.category_id.name : null;
+    productJson.category_icon = product.category_id ? product.category_id.icon : null;
+    productJson.category_id = product.category_id ? product.category_id._id : null;
+
+    res.json({ ...productJson, reviews: formattedReviews });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Get categories
-router.get('/meta/categories', (req, res) => {
-  const db = getDB();
-  const categories = db.prepare('SELECT * FROM categories').all();
-  res.json(categories);
+router.get('/meta/categories', async (req, res) => {
+  const { Category } = getDB();
+  try {
+    const categories = await Category.find({});
+    res.json(categories);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Add review
-router.post('/:id/reviews', authenticateToken, (req, res) => {
+router.post('/:id/reviews', authenticateToken, async (req, res) => {
   const { rating, comment } = req.body;
   if (!rating || rating < 1 || rating > 5) {
     return res.status(400).json({ error: 'Rating must be between 1 and 5' });
   }
 
-  const db = getDB();
+  const { Product, Review } = getDB();
   try {
-    const existing = db.prepare('SELECT id FROM reviews WHERE user_id = ? AND product_id = ?').get(req.user.id, req.params.id);
+    const existing = await Review.findOne({ user_id: req.user.id, product_id: req.params.id });
     if (existing) return res.status(409).json({ error: 'You have already reviewed this product' });
 
-    db.prepare('INSERT INTO reviews (user_id, product_id, rating, comment) VALUES (?, ?, ?, ?)').run(req.user.id, req.params.id, rating, comment);
-    
-    const avgResult = db.prepare('SELECT AVG(rating) as avg, COUNT(*) as count FROM reviews WHERE product_id = ?').get(req.params.id);
-    db.prepare('UPDATE products SET rating = ?, reviews_count = ? WHERE id = ?').run(
-      Math.round(avgResult.avg * 10) / 10, avgResult.count, req.params.id
-    );
+    const review = new Review({
+      user_id: req.user.id,
+      product_id: req.params.id,
+      rating,
+      comment
+    });
+    await review.save();
+
+    // Recompute avg rating and count
+    const reviews = await Review.find({ product_id: req.params.id });
+    const avg = reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length;
+
+    await Product.findByIdAndUpdate(req.params.id, {
+      rating: Math.round(avg * 10) / 10,
+      reviews_count: reviews.length
+    });
 
     res.status(201).json({ message: 'Review added successfully' });
   } catch (err) {
@@ -105,38 +145,61 @@ router.post('/:id/reviews', authenticateToken, (req, res) => {
 });
 
 // --- ADMIN Routes ---
-router.post('/', authenticateToken, requireAdmin, (req, res) => {
+router.post('/', authenticateToken, requireAdmin, async (req, res) => {
   const { name, description, price, original_price, category_id, stock, image, featured } = req.body;
   if (!name || !price) return res.status(400).json({ error: 'Name and price required' });
 
-  const db = getDB();
-  const result = db.prepare(
-    'INSERT INTO products (name, description, price, original_price, category_id, stock, image, featured) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-  ).run(name, description, price, original_price || null, category_id || null, stock || 0, image || null, featured ? 1 : 0);
-
-  const product = db.prepare('SELECT * FROM products WHERE id = ?').get(result.lastInsertRowid);
-  res.status(201).json(product);
+  const { Product } = getDB();
+  try {
+    const product = new Product({
+      name,
+      description,
+      price,
+      original_price: original_price || null,
+      category_id: category_id || null,
+      stock: stock || 0,
+      image: image || null,
+      featured: featured ? 1 : 0
+    });
+    await product.save();
+    res.status(201).json(product);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-router.put('/:id', authenticateToken, requireAdmin, (req, res) => {
+router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
   const { name, description, price, original_price, category_id, stock, image, featured } = req.body;
-  const db = getDB();
+  const { Product } = getDB();
 
-  const existing = db.prepare('SELECT id FROM products WHERE id = ?').get(req.params.id);
-  if (!existing) return res.status(404).json({ error: 'Product not found' });
+  try {
+    const product = await Product.findByIdAndUpdate(req.params.id, {
+      name,
+      description,
+      price,
+      original_price: original_price || null,
+      category_id: category_id || null,
+      stock,
+      image: image || null,
+      featured: featured ? 1 : 0
+    }, { new: true });
 
-  db.prepare(
-    'UPDATE products SET name = ?, description = ?, price = ?, original_price = ?, category_id = ?, stock = ?, image = ?, featured = ? WHERE id = ?'
-  ).run(name, description, price, original_price || null, category_id || null, stock, image || null, featured ? 1 : 0, req.params.id);
-
-  const updated = db.prepare('SELECT * FROM products WHERE id = ?').get(req.params.id);
-  res.json(updated);
+    if (!product) return res.status(404).json({ error: 'Product not found' });
+    res.json(product);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-router.delete('/:id', authenticateToken, requireAdmin, (req, res) => {
-  const db = getDB();
-  db.prepare('DELETE FROM products WHERE id = ?').run(req.params.id);
-  res.json({ message: 'Product deleted' });
+router.delete('/:id', authenticateToken, requireAdmin, async (req, res) => {
+  const { Product } = getDB();
+  try {
+    const product = await Product.findByIdAndDelete(req.params.id);
+    if (!product) return res.status(404).json({ error: 'Product not found' });
+    res.json({ message: 'Product deleted' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 module.exports = router;

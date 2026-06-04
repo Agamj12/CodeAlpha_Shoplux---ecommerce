@@ -1,6 +1,8 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const mongoose = require('mongoose');
 const { initDB, getDB } = require('./database');
 
 const authRoutes = require('./routes/auth');
@@ -37,19 +39,20 @@ app.get('*', (req, res) => {
 initDB();
 
 // Auto-seed if database is empty (necessary for serverless/ephemeral hosts like Vercel)
-try {
-  const db = getDB();
-  const userCount = db.prepare("SELECT COUNT(*) as count FROM users").get().count;
-  if (userCount === 0) {
-    console.log('🌱 Database is empty. Running auto-seed...');
-    const { seed } = require('./seed');
-    seed()
-      .then(() => console.log('🌱 Auto-seed completed successfully!'))
-      .catch(err => console.error('❌ Auto-seed failed:', err));
+mongoose.connection.once('open', async () => {
+  try {
+    const { User } = getDB();
+    const userCount = await User.countDocuments();
+    if (userCount === 0) {
+      console.log('🌱 Database is empty. Running auto-seed...');
+      const { seed } = require('./seed');
+      await seed();
+      console.log('🌱 Auto-seed completed successfully!');
+    }
+  } catch (error) {
+    console.error('❌ Failed to run auto-seed check:', error);
   }
-} catch (error) {
-  console.error('❌ Failed to run auto-seed check:', error);
-}
+});
 
 app.listen(PORT, () => {
   console.log(`🚀 E-Commerce Server running at http://localhost:${PORT}`);

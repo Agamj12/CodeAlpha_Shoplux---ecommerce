@@ -19,8 +19,8 @@ router.post('/register', async (req, res) => {
   }
 
   try {
-    const db = getDB();
-    const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
+    const { User } = getDB();
+    const existing = await User.findOne({ email });
     if (existing) {
       return res.status(409).json({ error: 'Email already registered' });
     }
@@ -29,15 +29,21 @@ router.post('/register', async (req, res) => {
     const avatarColors = ['#6C63FF', '#FF6584', '#43D9AD', '#FF8C42', '#5B8CFF'];
     const avatar = avatarColors[Math.floor(Math.random() * avatarColors.length)];
 
-    const stmt = db.prepare(
-      'INSERT INTO users (name, email, password, avatar) VALUES (?, ?, ?, ?)'
-    );
-    const result = stmt.run(name, email, hashedPassword, avatar);
+    const user = new User({
+      name,
+      email,
+      password: hashedPassword,
+      avatar
+    });
+    await user.save();
 
-    const user = db.prepare('SELECT id, name, email, role, avatar FROM users WHERE id = ?').get(result.lastInsertRowid);
     const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
 
-    res.status(201).json({ message: 'Registration successful', token, user });
+    // Exclude password from the returned user object
+    const userJson = user.toJSON();
+    delete userJson.password;
+
+    res.status(201).json({ message: 'Registration successful', token, user: userJson });
   } catch (err) {
     res.status(500).json({ error: 'Server error: ' + err.message });
   }
@@ -52,8 +58,8 @@ router.post('/login', async (req, res) => {
   }
 
   try {
-    const db = getDB();
-    const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+    const { User } = getDB();
+    const user = await User.findOne({ email });
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
@@ -64,42 +70,47 @@ router.post('/login', async (req, res) => {
     }
 
     const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
-    const { password: _, ...safeUser } = user;
+    const userJson = user.toJSON();
+    delete userJson.password;
 
-    res.json({ message: 'Login successful', token, user: safeUser });
+    res.json({ message: 'Login successful', token, user: userJson });
   } catch (err) {
     res.status(500).json({ error: 'Server error: ' + err.message });
   }
 });
 
 // Get current user profile
-router.get('/profile', require('../middleware/auth').authenticateToken, (req, res) => {
-  const db = getDB();
-  const user = db.prepare('SELECT id, name, email, role, avatar, created_at FROM users WHERE id = ?').get(req.user.id);
-  if (!user) return res.status(404).json({ error: 'User not found' });
-  res.json(user);
+router.get('/profile', require('../middleware/auth').authenticateToken, async (req, res) => {
+  try {
+    const { User } = getDB();
+    const user = await User.findById(req.user.id).select('-password');
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    res.json(user);
+  } catch (err) {
+    res.status(500).json({ error: 'Server error: ' + err.message });
+  }
 });
 
 // Update profile
 router.put('/profile', require('../middleware/auth').authenticateToken, async (req, res) => {
   const { name, currentPassword, newPassword } = req.body;
-  const db = getDB();
+  const { User } = getDB();
 
   try {
-    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
-    let updateQuery = 'UPDATE users SET name = ? WHERE id = ?';
-    let params = [name || user.name, req.user.id];
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    user.name = name || user.name;
 
     if (currentPassword && newPassword) {
       const isValid = await bcrypt.compare(currentPassword, user.password);
       if (!isValid) return res.status(400).json({ error: 'Current password is incorrect' });
-      const hashed = await bcrypt.hash(newPassword, 10);
-      updateQuery = 'UPDATE users SET name = ?, password = ? WHERE id = ?';
-      params = [name || user.name, hashed, req.user.id];
+      user.password = await bcrypt.hash(newPassword, 10);
     }
 
-    db.prepare(updateQuery).run(...params);
-    const updated = db.prepare('SELECT id, name, email, role, avatar FROM users WHERE id = ?').get(req.user.id);
+    await user.save();
+
+    const updated = await User.findById(req.user.id).select('-password');
     res.json({ message: 'Profile updated', user: updated });
   } catch (err) {
     res.status(500).json({ error: err.message });
