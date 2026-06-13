@@ -131,6 +131,58 @@ async function seed() {
       category: 'Electronics', stock: 40, featured: 0,
       image: 'https://images.unsplash.com/photo-1600294037592-7f501b2e9a4c?w=500&q=80'
     },
+    { name: 'Dell XPS 15 Laptop', description: '15.6" OLED display, Intel Core i9, 32GB RAM, 1TB SSD, NVIDIA RTX 4060.', price: 199999, original_price: 224999,
+      category: 'Electronics', stock: 10, featured: 1,
+      image: 'https://images.unsplash.com/photo-1593642632823-8f785ba67e45?w=500&q=80', rating: 4.7, reviews_count: 98
+    },
+    { name: 'Nintendo Switch OLED', description: 'Handheld gaming console with a vibrant 7-inch OLED screen, 64GB storage, and versatile play modes.', price: 32999, original_price: 35999,
+      category: 'Electronics', stock: 25, featured: 0,
+      image: 'https://images.unsplash.com/photo-1578632767115-351597cf2477?w=500&q=80', rating: 4.8, reviews_count: 320
+    },
+    { name: 'Kindle Paperwhite', description: '6.8" display, adjustable warm light, up to 10 weeks of battery life, and 20% faster page turns.', price: 14999, original_price: null,
+      category: 'Electronics', stock: 40, featured: 0,
+      image: 'https://images.unsplash.com/photo-1594980596870-8aa52a78d8cd?w=500&q=80', rating: 4.6, reviews_count: 185
+    },
+    { name: 'Patagonia Torrentshell 3L Jacket', description: 'Simple and unpretentious, our trusted Torrentshell 3L Jacket provides 3-layer waterproof/breathable performance.', price: 12999, original_price: 14999,
+      category: 'Clothing', stock: 15, featured: 0,
+      image: 'https://images.unsplash.com/photo-1544441893-675973e31985?w=500&q=80', rating: 4.5, reviews_count: 76
+    },
+    { name: 'Ray-Ban Classic Wayfarer', description: 'Distinctive shape paired with the traditional Ray-Ban signature logo on the temples. Unisex polarized sunglasses.', price: 9999, original_price: 11999,
+      category: 'Clothing', stock: 30, featured: 1,
+      image: 'https://images.unsplash.com/photo-1572635196237-14b3f281503f?w=500&q=80', rating: 4.7, reviews_count: 243
+    },
+    { name: 'Nespresso Vertuo Next Coffee Machine', description: 'Elegant design, automatic capsule recognition, and crema-rich coffee brewing in 5 cup sizes.', price: 15999, original_price: 18999,
+      category: 'Home & Garden', stock: 12, featured: 1,
+      image: 'https://images.unsplash.com/photo-1517701604599-bb29b565090c?w=500&q=80', rating: 4.4, reviews_count: 112
+    },
+    { name: 'Ergonomic Office Chair', description: 'Adjustable lumbar support, 3D armrests, breathable mesh back, and high-density foam seat cushion.', price: 18999, original_price: 24999,
+      category: 'Home & Garden', stock: 10, featured: 0,
+      image: 'https://images.unsplash.com/photo-1505797149-43b0069ec26b?w=500&q=80', rating: 4.6, reviews_count: 85
+    },
+    { name: 'Hydro Flask Wide Mouth Water Bottle', description: 'TempShield double-wall vacuum insulation keeps drinks cold up to 24 hours and hot up to 12.', price: 3499, original_price: null,
+      category: 'Sports', stock: 100, featured: 1,
+      image: 'https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=500&q=80', rating: 4.8, reviews_count: 562
+    },
+    { name: 'Fitbit Charge 6', description: 'Premium fitness tracker with built-in GPS, heart rate monitor, stress management tools, and sleep tracking.', price: 13999, original_price: 15999,
+      category: 'Sports', stock: 22, featured: 0,
+      image: 'https://images.unsplash.com/photo-1575311373937-040b8e1fd5b6?w=500&q=80', rating: 4.3, reviews_count: 94
+    },
+    { name: 'Sapiens: A Brief History of Humankind', description: 'By Yuval Noah Harari. A groundbreaking narrative of humanity\'s creation and evolution.', price: 499, original_price: 699,
+      category: 'Books', stock: 150, featured: 1,
+      image: 'https://images.unsplash.com/photo-1447069387593-a5de0862481e?w=500&q=80', rating: 4.7, reviews_count: 1205
+    },
+    { name: 'Clean Code', description: 'By Robert C. Martin. A handbook of agile software craftsmanship. The ultimate book for writing clean, readable code.', price: 3299, original_price: 3999,
+      category: 'Books', stock: 50, featured: 0,
+      image: 'https://images.unsplash.com/photo-1532012197267-da84d127e765?w=500&q=80', rating: 4.9, reviews_count: 489
+    },
+    { name: 'CeraVe Hydrating Facial Cleanser', description: 'Daily face wash for normal to dry skin with hyaluronic acid, ceramides, and glycerin. Fragrance-free.', price: 1299, original_price: null,
+      category: 'Beauty', stock: 80, featured: 0,
+      image: 'https://images.unsplash.com/photo-1556228720-195a672e8a03?w=500&q=80', rating: 4.8, reviews_count: 642
+    },
+    { name: 'Fenty Beauty Gloss Bomb', description: 'Universal lip luminizer that delivers explosive shine in one wash, with a non-sticky formula.', price: 2199, original_price: 2499,
+      category: 'Beauty', stock: 35, featured: 1,
+      image: 'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=500&q=80', rating: 4.6, reviews_count: 210
+    },
   ];
 
   const ratings = [4.5, 4.8, 4.7, 4.3, 4.6, 4.2, 4.4, 4.9, 4.1, 4.7, 4.5, 4.8, 4.6, 4.3, 4.7, 4.5];
@@ -147,8 +199,8 @@ async function seed() {
       stock: p.stock,
       image: p.image,
       featured: p.featured,
-      rating: ratings[i] || 4.5,
-      reviews_count: reviewCounts[i] || 50
+      rating: p.rating || ratings[i] || 4.5,
+      reviews_count: p.reviews_count || reviewCounts[i] || 50
     });
     await newProduct.save();
   }
