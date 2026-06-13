@@ -44,6 +44,12 @@ async function renderProductDetail(params = {}) {
             </div>
           </div>
         </div>
+        <div class="section" style="margin-top:40px;margin-bottom:20px">
+          <div class="section-header">
+            <h2 style="font-family:'Outfit',sans-serif;font-size:1.5rem">🤝 Frequently Bought <span>Together</span></h2>
+          </div>
+          <div class="products-grid" id="frequently-bought-grid"><div class="loader-ring" style="margin:20px auto"></div></div>
+        </div>
         <div class="card" style="margin-top:40px">
           <h2 style="margin-bottom:24px;font-family:'Outfit',sans-serif">Reviews (${p.reviews_count})</h2>
           ${Auth.user ? `
@@ -69,8 +75,25 @@ async function renderProductDetail(params = {}) {
         </div>
       </div>`;
     window._productRating = 0;
+    loadFrequentlyBoughtTogether(p.id);
   } catch (e) {
     root.innerHTML = '<div class="page empty-state"><div class="icon">&#9888;</div><h3>Product not found</h3></div>';
+  }
+}
+
+async function loadFrequentlyBoughtTogether(productId) {
+  try {
+    const products = await API.get('/recommendations/products/' + productId + '?limit=4');
+    const container = document.getElementById('frequently-bought-grid');
+    if (container) {
+      if (products.length === 0) {
+        container.parentElement.style.display = 'none';
+        return;
+      }
+      container.innerHTML = products.map(renderProductCard).join('');
+    }
+  } catch (e) {
+    console.error('Failed to load frequently bought together products', e);
   }
 }
 

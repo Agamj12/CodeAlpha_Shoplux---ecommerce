@@ -20,6 +20,12 @@ function renderHome() {
         </div>
         <div class="categories-grid" id="categories-grid"><div class="loader-ring" style="margin:40px auto"></div></div>
       </div>
+      <div class="section" id="recommendations-section">
+        <div class="section-header">
+          <h2 class="section-title">✨ AI Recommended <span>For You</span></h2>
+        </div>
+        <div class="products-grid" id="recommendations-grid"><div class="loader-ring" style="margin:40px auto"></div></div>
+      </div>
       <div class="section" id="featured-section">
         <div class="section-header">
           <h2 class="section-title">&#11088; Featured <span>Products</span></h2>
@@ -41,9 +47,10 @@ function renderHome() {
 
 async function loadHomeData() {
   try {
-    const [cats, featured] = await Promise.all([
+    const [cats, featured, recommendations] = await Promise.all([
       API.get('/products/meta/categories'),
-      API.get('/products?featured=true&limit=8')
+      API.get('/products?featured=true&limit=8'),
+      API.get('/recommendations?limit=4')
     ]);
     const catsEl = document.getElementById('categories-grid');
     if (catsEl) catsEl.innerHTML = cats.map(c => `
@@ -51,6 +58,10 @@ async function loadHomeData() {
         <div class="category-icon">${c.icon}</div>
         <div class="category-name">${c.name}</div>
       </div>`).join('');
+    
+    const recsEl = document.getElementById('recommendations-grid');
+    if (recsEl) recsEl.innerHTML = recommendations.map(renderProductCard).join('');
+
     const featEl = document.getElementById('featured-grid');
     if (featEl) featEl.innerHTML = featured.products.map(renderProductCard).join('');
   } catch (e) { Toast.show('Failed to load content', 'error'); }
@@ -61,6 +72,7 @@ function renderProductCard(p) {
   const stars = '&#9733;'.repeat(Math.round(p.rating || 0)) + '&#9734;'.repeat(5 - Math.round(p.rating || 0));
   return `
     <div class="product-card" onclick="app.navigate('product',{id:${p.id}})">
+      ${p.reason ? `<div class="product-ai-badge">✨ ${p.reason}</div>` : ''}
       ${p.image
         ? `<img class="product-img" src="${p.image}" alt="${p.name}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
         : ''

@@ -35,8 +35,31 @@ async function renderCartPage() {
             </button>
           </div>
         </div>
+        <div class="section" style="margin-top:40px;margin-bottom:20px;width:100%">
+          <div class="section-header">
+            <h2 style="font-family:'Outfit',sans-serif;font-size:1.5rem">✨ Complete Your Purchase</h2>
+          </div>
+          <div class="products-grid" id="cart-recommendations-grid"><div class="loader-ring" style="margin:20px auto"></div></div>
+        </div>
       </div>`;
+    loadCartRecommendations();
   } catch (e) { root.innerHTML = '<div class="page"><div class="alert alert-error">' + e.message + '</div></div>'; }
+}
+
+async function loadCartRecommendations() {
+  try {
+    const products = await API.get('/recommendations?limit=4');
+    const container = document.getElementById('cart-recommendations-grid');
+    if (container) {
+      if (products.length === 0) {
+        container.parentElement.style.display = 'none';
+        return;
+      }
+      container.innerHTML = products.map(renderProductCard).join('');
+    }
+  } catch (e) {
+    console.error('Failed to load cart recommendations', e);
+  }
 }
 
 function renderCartItem(item) {
