@@ -18,7 +18,7 @@ const AIAssistant = {
       </button>
 
       <!-- Chat Window -->
-      <div id="ai-chat-window" class="ai-chat-box hidden">
+      <div id="ai-chat-window" class="ai-chat-window hidden">
         <div class="ai-chat-header">
           <div class="ai-chat-header-info">
             <span class="ai-avatar">✨</span>
